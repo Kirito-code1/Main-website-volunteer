@@ -9,16 +9,13 @@ import {
   PlusCircle, 
   Home, 
   Menu, 
-  X,
-  Loader2
+  X 
 } from "lucide-react";
 import { createBrowserClient } from "@supabase/ssr";
 
 export default function Navbar() {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [user, setUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
   
   const MAIN_SITE_URL = "https://main-website-volunteer.vercel.app";
 
@@ -27,29 +24,7 @@ export default function Navbar() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
   );
 
-  useEffect(() => {
-    // Слушаем изменения авторизации, чтобы Navbar обновлялся мгновенно
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
-        setUser(session.user);
-      } else {
-        setUser(null);
-      }
-      setAuthLoading(false);
-    });
-
-    // Первичная проверка сессии
-    const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user || null);
-      setAuthLoading(false);
-    };
-
-    checkUser();
-
-    return () => subscription.unsubscribe();
-  }, []);
-
+  // Блокируем скролл при открытом меню
   useEffect(() => {
     if (isMenuOpen) {
       document.body.style.overflow = "hidden";
@@ -61,8 +36,6 @@ export default function Navbar() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    // Очищаем локальное состояние перед редиректом
-    setUser(null);
     window.location.href = `${MAIN_SITE_URL}/login`;
   };
 
@@ -90,47 +63,34 @@ export default function Navbar() {
 
         {/* Десктопная навигация */}
         <div className="hidden md:flex items-center gap-2">
-          {authLoading ? (
-            <div className="px-4"><Loader2 className="w-5 h-5 animate-spin text-gray-200" /></div>
-          ) : user ? (
-            <>
-              {navLinks.map((link) => {
-                const Icon = link.icon;
-                const isActive = pathname === link.href;
-                return (
-                  <Link 
-                    key={link.href}
-                    href={link.href} 
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all duration-200 ${
-                      isActive 
-                        ? "bg-green-50 text-[#10b981]" 
-                        : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
-                    }`}
-                  >
-                    <Icon className="w-5 h-5" />
-                    <span>{link.name}</span>
-                  </Link>
-                );
-              })}
-              
-              <div className="w-px h-6 bg-gray-100 mx-2" />
-
-              <button 
-                onClick={handleSignOut} 
-                className="p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all flex items-center gap-2 group"
+          {navLinks.map((link) => {
+            const Icon = link.icon;
+            const isActive = pathname === link.href;
+            return (
+              <Link 
+                key={link.href}
+                href={link.href} 
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all duration-200 ${
+                  isActive 
+                    ? "bg-green-50 text-[#10b981]" 
+                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                }`}
               >
-                <LogOut className="w-5 h-5" />
-                <span className="hidden group-hover:inline text-xs font-black">Выход</span>
-              </button>
-            </>
-          ) : (
-            <Link 
-              href={`${MAIN_SITE_URL}/login`}
-              className="px-6 py-2.5 bg-[#10b981] text-white rounded-xl font-black shadow-lg shadow-green-100 hover:scale-105 active:scale-95 transition-all"
-            >
-              Войти
-            </Link>
-          )}
+                <Icon className="w-5 h-5" />
+                <span>{link.name}</span>
+              </Link>
+            );
+          })}
+          
+          <div className="w-px h-6 bg-gray-100 mx-2" />
+
+          <button 
+            onClick={handleSignOut} 
+            className="p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all flex items-center gap-2 group"
+          >
+            <LogOut className="w-5 h-5" />
+            <span className="hidden group-hover:inline text-xs font-black">Выход</span>
+          </button>
         </div>
 
         {/* Кнопка бургера */}
@@ -142,57 +102,43 @@ export default function Navbar() {
           {isMenuOpen ? <X className="w-7 h-7" /> : <Menu className="w-7 h-7" />}
         </button>
 
-        {/* Мобильное меню */}
+        {/* Мобильное меню (Оверлей) */}
         <div className={`
           fixed inset-0 bg-white z-[105] md:hidden flex flex-col transition-all duration-300 ease-in-out
           ${isMenuOpen ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-full pointer-events-none"}
         `}>
           <div className="flex flex-col h-full pt-24 px-6 pb-10">
-            {user ? (
-              <>
-                <div className="space-y-3">
-                  {navLinks.map((link) => {
-                    const Icon = link.icon;
-                    const isActive = pathname === link.href;
-                    return (
-                      <Link 
-                        key={link.href}
-                        href={link.href}
-                        onClick={() => setIsMenuOpen(false)}
-                        className={`flex items-center gap-4 p-5 rounded-2xl font-black text-xl transition-all ${
-                          isActive 
-                            ? "bg-green-50 text-[#10b981]" 
-                            : "text-gray-500 bg-gray-50"
-                        }`}
-                      >
-                        <Icon className="w-6 h-6" />
-                        {link.name}
-                      </Link>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-auto pt-8 border-t border-gray-100">
-                  <button 
-                    onClick={handleSignOut}
-                    className="w-full flex items-center gap-4 p-5 rounded-2xl font-black text-xl text-red-500 bg-red-50 active:scale-[0.98] transition-all"
+            <div className="space-y-3">
+              {navLinks.map((link) => {
+                const Icon = link.icon;
+                const isActive = pathname === link.href;
+                return (
+                  <Link 
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setIsMenuOpen(false)}
+                    className={`flex items-center gap-4 p-5 rounded-2xl font-black text-xl transition-all ${
+                      isActive 
+                        ? "bg-green-50 text-[#10b981]" 
+                        : "text-gray-500 bg-gray-50"
+                    }`}
                   >
-                    <LogOut className="w-6 h-6" />
-                    Выход из системы
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="mt-10">
-                <Link 
-                  href={`${MAIN_SITE_URL}/login`}
-                  onClick={() => setIsMenuOpen(false)}
-                  className="w-full flex items-center justify-center p-6 bg-[#10b981] text-white rounded-3xl font-black text-2xl shadow-xl shadow-green-100"
-                >
-                  Войти в аккаунт
-                </Link>
-              </div>
-            )}
+                    <Icon className="w-6 h-6" />
+                    {link.name}
+                  </Link>
+                );
+              })}
+            </div>
+
+            <div className="mt-auto pt-8 border-t border-gray-100">
+              <button 
+                onClick={handleSignOut}
+                className="w-full flex items-center gap-4 p-5 rounded-2xl font-black text-xl text-red-500 bg-red-50 active:scale-[0.98] transition-all"
+              >
+                <LogOut className="w-6 h-6" />
+                Выход из системы
+              </button>
+            </div>
           </div>
         </div>
       </div>
