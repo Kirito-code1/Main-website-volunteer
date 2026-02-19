@@ -7,6 +7,10 @@ import { createBrowserClient } from "@supabase/ssr";
 
 export default function Navbar() {
   const pathname = usePathname();
+  
+  // ЗАМЕНЯЕМ НА ТВОЙ URL VERCEL
+  const MAIN_SITE_URL = "https://main-website-volunteer.vercel.app";
+
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "",
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
@@ -14,7 +18,8 @@ export default function Navbar() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    window.location.href = "http://localhost:3000/login";
+    // Исправлено: перенаправляем на страницу логина на реальном домене
+    window.location.href = `${MAIN_SITE_URL}/login`;
   };
 
   const navLinks = [
@@ -50,8 +55,15 @@ export default function Navbar() {
               </Link>
             );
           })}
-          <button onClick={handleSignOut} className="ml-2 p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
+          
+          {/* Кнопка выхода */}
+          <button 
+            onClick={handleSignOut} 
+            title="Выйти"
+            className="ml-2 p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all flex items-center gap-2 group"
+          >
             <LogOut className="w-5 h-5" />
+            <span className="hidden md:group-hover:inline text-xs font-bold">Выход</span>
           </button>
         </div>
       </div>

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { 
   User, Mail, Edit3, LogOut, CheckCircle2, 
-  X, ShieldCheck, Camera, CalendarDays, Loader2, Trash2, AlertTriangle
+  X, ShieldCheck, Camera, CalendarDays, Loader2, Trash2, AlertTriangle, Phone
 } from "lucide-react";
 
 export default function ProfilePage() {
@@ -15,12 +15,13 @@ export default function ProfilePage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const [newName, setNewName] = useState("");
+  const [newPhone, setNewPhone] = useState(""); // Новое состояние для телефона
   const [isSaving, setIsSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // URL вашего сайта с авторизацией (порт 3000)
-  const AUTH_SITE_URL = "http://localhost:3000";
+  // Актуальный URL вашего сайта на Vercel
+  const AUTH_SITE_URL = "https://main-website-volunteer.vercel.app";
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "",
@@ -39,6 +40,7 @@ export default function ProfilePage() {
     }
     setUser(user);
     setNewName(user.user_metadata?.full_name || "");
+    setNewPhone(user.user_metadata?.phone || "");
     setLoading(false);
   }
 
@@ -68,7 +70,7 @@ export default function ProfilePage() {
       if (updateError) throw updateError;
       await fetchUser();
     } catch (error) {
-      alert("Ошибка загрузки: " + error.message);
+      console.error("Ошибка загрузки:", error.message);
     } finally {
       setUploading(false);
     }
@@ -78,7 +80,10 @@ export default function ProfilePage() {
     e.preventDefault();
     setIsSaving(true);
     const { error } = await supabase.auth.updateUser({
-      data: { full_name: newName }
+      data: { 
+        full_name: newName,
+        phone: newPhone 
+      }
     });
 
     if (!error) {
@@ -96,13 +101,14 @@ export default function ProfilePage() {
   const confirmDeleteAccount = async () => {
     try {
       setIsDeleting(true);
+      // Предполагается, что у вас есть RPC функция delete_user в Supabase
       const { error } = await supabase.rpc("delete_user");
       if (error) throw error;
 
       await supabase.auth.signOut();
       window.location.href = `${AUTH_SITE_URL}/login`;
     } catch (error) {
-      alert("Ошибка при удалении: " + error.message);
+      console.error("Ошибка при удалении:", error.message);
       setIsDeleting(false);
       setIsDeleteModalOpen(false);
     }
@@ -178,25 +184,36 @@ export default function ProfilePage() {
         {/* КАРТОЧКИ */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           
-          {/* Email */}
-          <div className="bg-white p-8 rounded-[35px] border border-gray-100 shadow-sm flex flex-col justify-between group hover:border-blue-100 transition-colors">
-            <div className="flex items-center gap-5 mb-6 min-w-0">
-              <div className="flex-shrink-0 p-4 bg-blue-50 text-blue-600 rounded-2xl group-hover:scale-110 transition-transform text-blue-600">
-                <Mail className="w-7 h-7" />
+          {/* Контакты */}
+          <div className="bg-white p-8 rounded-[35px] border border-gray-100 shadow-sm flex flex-col gap-6 group hover:border-blue-100 transition-colors">
+            {/* Email */}
+            <div className="flex items-center gap-5 min-w-0">
+              <div className="flex-shrink-0 p-4 bg-blue-50 text-blue-600 rounded-2xl group-hover:scale-110 transition-transform">
+                <Mail className="w-6 h-6" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] text-gray-400 font-black uppercase tracking-tighter">Почта</p>
-                <p className="text-gray-900 font-bold text-lg truncate break-all" title={user.email}>{user.email}</p>
+                <p className="text-gray-900 font-bold text-base truncate" title={user.email}>{user.email}</p>
               </div>
             </div>
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-50 text-green-600 rounded-full text-xs font-black uppercase tracking-tighter self-start">
-              <CheckCircle2 className="w-4 h-4" /> Верифицирован
+
+            {/* Phone */}
+            <div className="flex items-center gap-5 min-w-0">
+              <div className="flex-shrink-0 p-4 bg-green-50 text-[#10b981] rounded-2xl group-hover:scale-110 transition-transform">
+                <Phone className="w-6 h-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] text-gray-400 font-black uppercase tracking-tighter">Телефон</p>
+                <p className="text-gray-900 font-bold text-base truncate">
+                  {user.user_metadata?.phone || "Не указан"}
+                </p>
+              </div>
             </div>
           </div>
 
           {/* Аккаунт */}
           <div className="bg-white p-8 rounded-[35px] border border-gray-100 shadow-sm flex flex-col">
-            <h3 className="text-gray-900 font-black text-xl mb-1">Аккаунт</h3>
+            <h3 className="text-gray-900 font-black text-xl mb-1">Безопасность</h3>
             <p className="text-gray-400 text-sm font-medium mb-6">Управление доступом</p>
             
             <div className="space-y-3 mt-auto">
@@ -211,24 +228,32 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* МОДАЛКА: РЕДАКТИРОВАНИЕ ИМЕНИ */}
+      {/* МОДАЛКА: РЕДАКТИРОВАНИЕ ПРОФИЛЯ */}
       {isEditModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden animate-in zoom-in-95">
             <div className="p-8 border-b border-gray-50 flex justify-between items-center">
-              <h2 className="text-2xl font-black text-gray-900">Изменить имя</h2>
+              <h2 className="text-2xl font-black text-gray-900">Профиль</h2>
               <button onClick={() => setIsEditModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full"><X className="text-gray-400" /></button>
             </div>
-            <form onSubmit={handleUpdateProfile} className="p-8 space-y-6">
+            <form onSubmit={handleUpdateProfile} className="p-8 space-y-5">
               <div className="space-y-2">
-                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Новое имя</label>
+                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Имя</label>
                 <input 
                   type="text" required value={newName} onChange={(e) => setNewName(e.target.value)}
                   className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 ring-green-100 outline-none font-bold text-gray-900"
                 />
               </div>
-              <button disabled={isSaving} className="w-full py-5 bg-[#10b981] text-white rounded-[22px] font-black shadow-lg shadow-green-100 active:scale-95 transition-all">
-                {isSaving ? "Сохранение..." : "Сохранить"}
+              <div className="space-y-2">
+                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Телефон</label>
+                <input 
+                  type="tel" value={newPhone} onChange={(e) => setNewPhone(e.target.value)}
+                  placeholder="+7 (___) ___ __ __"
+                  className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 ring-green-100 outline-none font-bold text-gray-900"
+                />
+              </div>
+              <button disabled={isSaving} className="w-full py-5 bg-[#10b981] text-white rounded-[22px] font-black shadow-lg shadow-green-100 active:scale-95 transition-all mt-4">
+                {isSaving ? "Сохранение..." : "Сохранить изменения"}
               </button>
             </form>
           </div>
