@@ -39,27 +39,46 @@ export default function ProfilePage() {
   );
 
   useEffect(() => {
-    fetchUser();
-  }, []);
+    const checkUser = async () => {
+      try {
+        // 1. Сначала пробуем получить сессию из локального хранилища/кук (это мгновенно)
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
 
-  async function fetchUser() {
-    try {
-      const { data: { user }, error } = await supabase.auth.getUser();
+        if (session?.user) {
+          setUser(session.user);
+          setNewName(session.user.user_metadata?.full_name || "");
+          setNewPhone(session.user.user_metadata?.phone || "");
+          setLoading(false);
+          return; // Юзер найден, выходим из функции
+        }
 
-      if (error || !user) {
-        window.location.assign(`${AUTH_SITE_URL}/login`);
-        return;
+        // 2. Если сессии нет, на всякий случай перепроверяем через серверный getUser
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (user) {
+          setUser(user);
+          setNewName(user.user_metadata?.full_name || "");
+          setNewPhone(user.user_metadata?.phone || "");
+        } else {
+          // 3. Только если ВООБЩЕ ничего не помогло — тогда редирект
+          window.location.href =
+            "https://main-website-volunteer.vercel.app/login";
+        }
+      } catch (err) {
+        console.error("Auth error:", err);
+      } finally {
+        setLoading(false);
       }
+    };
 
-      setUser(user);
-      setNewName(user.user_metadata?.full_name || "");
-      setNewPhone(user.user_metadata?.phone || "");
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  }
+    checkUser();
+  }, [supabase]);
 
   const handleAvatarUpload = async (e) => {
     try {
@@ -76,7 +95,9 @@ export default function ProfilePage() {
 
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(fileName);
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("avatars").getPublicUrl(fileName);
 
       const { error: updateError } = await supabase.auth.updateUser({
         data: { avatar_url: publicUrl },
@@ -194,7 +215,8 @@ export default function ProfilePage() {
                 <ShieldCheck className="w-5 h-5 md:w-6 md:h-6 text-[#10b981]" />
               </h1>
               <div className="flex items-center justify-center md:justify-start gap-2 text-gray-400 font-bold uppercase text-[10px] md:text-xs tracking-widest">
-                <CalendarDays className="w-3.5 h-3.5 md:w-4 md:h-4" /> На сайте с {getJoinedDate()}
+                <CalendarDays className="w-3.5 h-3.5 md:w-4 md:h-4" /> На сайте
+                с {getJoinedDate()}
               </div>
             </div>
           </div>
@@ -209,8 +231,15 @@ export default function ProfilePage() {
                 <Mail className="w-5 h-5 md:w-7 md:h-7" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[9px] md:text-[10px] text-gray-400 font-black uppercase tracking-tighter">Почта</p>
-                <p className="text-gray-900 font-bold text-sm md:text-base truncate" title={user.email}>{user.email}</p>
+                <p className="text-[9px] md:text-[10px] text-gray-400 font-black uppercase tracking-tighter">
+                  Почта
+                </p>
+                <p
+                  className="text-gray-900 font-bold text-sm md:text-base truncate"
+                  title={user.email}
+                >
+                  {user.email}
+                </p>
               </div>
             </div>
 
@@ -219,21 +248,35 @@ export default function ProfilePage() {
                 <Phone className="w-5 h-5 md:w-7 md:h-7" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[9px] md:text-[10px] text-gray-400 font-black uppercase tracking-tighter">Телефон</p>
-                <p className="text-gray-900 font-bold text-sm md:text-base truncate">{user.user_metadata?.phone || "Не указан"}</p>
+                <p className="text-[9px] md:text-[10px] text-gray-400 font-black uppercase tracking-tighter">
+                  Телефон
+                </p>
+                <p className="text-gray-900 font-bold text-sm md:text-base truncate">
+                  {user.user_metadata?.phone || "Не указан"}
+                </p>
               </div>
             </div>
           </div>
 
           {/* Аккаунт */}
           <div className="bg-white p-6 md:p-8 rounded-[30px] md:rounded-[35px] border border-gray-100 shadow-sm flex flex-col">
-            <h3 className="text-gray-900 font-black text-lg md:text-xl mb-1">Безопасность</h3>
-            <p className="text-gray-400 text-xs md:text-sm font-medium mb-6">Управление доступом</p>
+            <h3 className="text-gray-900 font-black text-lg md:text-xl mb-1">
+              Безопасность
+            </h3>
+            <p className="text-gray-400 text-xs md:text-sm font-medium mb-6">
+              Управление доступом
+            </p>
             <div className="space-y-3 md:mt-auto">
-              <button onClick={handleLogout} className="w-full py-3.5 md:py-4 bg-gray-50 text-gray-900 rounded-[18px] md:rounded-[22px] font-black hover:bg-gray-100 transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm md:text-base">
+              <button
+                onClick={handleLogout}
+                className="w-full py-3.5 md:py-4 bg-gray-50 text-gray-900 rounded-[18px] md:rounded-[22px] font-black hover:bg-gray-100 transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm md:text-base"
+              >
                 <LogOut className="w-4 h-4 md:w-5 md:h-5" /> Выйти
               </button>
-              <button onClick={() => setIsDeleteModalOpen(true)} className="w-full py-3.5 md:py-4 border-2 border-red-50 text-red-500 rounded-[18px] md:rounded-[22px] font-black hover:bg-red-50 transition-all flex items-center justify-center gap-2 text-sm md:text-base">
+              <button
+                onClick={() => setIsDeleteModalOpen(true)}
+                className="w-full py-3.5 md:py-4 border-2 border-red-50 text-red-500 rounded-[18px] md:rounded-[22px] font-black hover:bg-red-50 transition-all flex items-center justify-center gap-2 text-sm md:text-base"
+              >
                 <Trash2 className="w-4 h-4 md:w-5 md:h-5" /> Удалить
               </button>
             </div>
@@ -246,21 +289,48 @@ export default function ProfilePage() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-md rounded-[30px] md:rounded-[40px] shadow-2xl overflow-hidden animate-in zoom-in-95">
             <div className="p-6 md:p-8 border-b border-gray-50 flex justify-between items-center">
-              <h2 className="text-xl md:text-2xl font-black text-gray-900">Профиль</h2>
-              <button onClick={() => setIsEditModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full"><X className="text-gray-400" /></button>
+              <h2 className="text-xl md:text-2xl font-black text-gray-900">
+                Профиль
+              </h2>
+              <button
+                onClick={() => setIsEditModalOpen(false)}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                <X className="text-gray-400" />
+              </button>
             </div>
-            <form onSubmit={handleUpdateProfile} className="p-6 md:p-8 space-y-5">
+            <form
+              onSubmit={handleUpdateProfile}
+              className="p-6 md:p-8 space-y-5"
+            >
               <div className="space-y-2">
-                <label className="text-[10px] md:text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Имя</label>
-                <input type="text" required value={newName} onChange={(e) => setNewName(e.target.value)}
-                  className="w-full px-5 py-3.5 md:px-6 md:py-4 bg-gray-50 border border-gray-100 rounded-xl md:rounded-2xl focus:ring-2 ring-green-100 outline-none font-bold text-gray-900 text-sm md:text-base" />
+                <label className="text-[10px] md:text-xs font-black text-gray-400 uppercase tracking-widest ml-1">
+                  Имя
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  className="w-full px-5 py-3.5 md:px-6 md:py-4 bg-gray-50 border border-gray-100 rounded-xl md:rounded-2xl focus:ring-2 ring-green-100 outline-none font-bold text-gray-900 text-sm md:text-base"
+                />
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] md:text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Телефон</label>
-                <input type="tel" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="+7 (___) ___ __ __"
-                  className="w-full px-5 py-3.5 md:px-6 md:py-4 bg-gray-50 border border-gray-100 rounded-xl md:rounded-2xl focus:ring-2 ring-green-100 outline-none font-bold text-gray-900 text-sm md:text-base" />
+                <label className="text-[10px] md:text-xs font-black text-gray-400 uppercase tracking-widest ml-1">
+                  Телефон
+                </label>
+                <input
+                  type="tel"
+                  value={newPhone}
+                  onChange={(e) => setNewPhone(e.target.value)}
+                  placeholder="+7 (___) ___ __ __"
+                  className="w-full px-5 py-3.5 md:px-6 md:py-4 bg-gray-50 border border-gray-100 rounded-xl md:rounded-2xl focus:ring-2 ring-green-100 outline-none font-bold text-gray-900 text-sm md:text-base"
+                />
               </div>
-              <button disabled={isSaving} className="w-full py-4 md:py-5 bg-[#10b981] text-white rounded-[18px] md:rounded-[22px] font-black shadow-lg shadow-green-100 active:scale-95 transition-all mt-4 text-sm md:text-base">
+              <button
+                disabled={isSaving}
+                className="w-full py-4 md:py-5 bg-[#10b981] text-white rounded-[18px] md:rounded-[22px] font-black shadow-lg shadow-green-100 active:scale-95 transition-all mt-4 text-sm md:text-base"
+              >
                 {isSaving ? "Сохранение..." : "Сохранить изменения"}
               </button>
             </form>
@@ -276,17 +346,29 @@ export default function ProfilePage() {
               <div className="w-16 h-16 md:w-20 md:h-20 bg-red-50 text-red-500 rounded-[24px] md:rounded-[28px] flex items-center justify-center mx-auto mb-6">
                 <AlertTriangle className="w-8 h-8 md:w-10 md:h-10" />
               </div>
-              <h2 className="text-xl md:text-2xl font-black text-gray-900 mb-3">Удалить аккаунт?</h2>
+              <h2 className="text-xl md:text-2xl font-black text-gray-900 mb-3">
+                Удалить аккаунт?
+              </h2>
               <p className="text-gray-500 text-sm md:text-base font-medium leading-relaxed mb-8 px-2">
-                Это действие **необратимо**. Все ваши данные и история будут удалены навсегда.
+                Это действие **необратимо**. Все ваши данные и история будут
+                удалены навсегда.
               </p>
               <div className="flex flex-col gap-3">
-                <button onClick={confirmDeleteAccount} disabled={isDeleting}
-                  className="w-full py-4 md:py-5 bg-red-500 text-white rounded-[18px] md:rounded-[22px] font-black hover:bg-red-600 transition-all shadow-lg shadow-red-100 active:scale-95 flex items-center justify-center gap-2 text-sm md:text-base">
-                  {isDeleting ? <Loader2 className="animate-spin w-4 h-4 md:w-5 md:h-5" /> : "Да, удалить навсегда"}
+                <button
+                  onClick={confirmDeleteAccount}
+                  disabled={isDeleting}
+                  className="w-full py-4 md:py-5 bg-red-500 text-white rounded-[18px] md:rounded-[22px] font-black hover:bg-red-600 transition-all shadow-lg shadow-red-100 active:scale-95 flex items-center justify-center gap-2 text-sm md:text-base"
+                >
+                  {isDeleting ? (
+                    <Loader2 className="animate-spin w-4 h-4 md:w-5 md:h-5" />
+                  ) : (
+                    "Да, удалить навсегда"
+                  )}
                 </button>
-                <button onClick={() => setIsDeleteModalOpen(false)}
-                  className="w-full py-4 md:py-5 bg-gray-50 text-gray-500 rounded-[18px] md:rounded-[22px] font-black hover:bg-gray-100 transition-all text-sm md:text-base">
+                <button
+                  onClick={() => setIsDeleteModalOpen(false)}
+                  className="w-full py-4 md:py-5 bg-gray-50 text-gray-500 rounded-[18px] md:rounded-[22px] font-black hover:bg-gray-100 transition-all text-sm md:text-base"
+                >
                   Отмена
                 </button>
               </div>
