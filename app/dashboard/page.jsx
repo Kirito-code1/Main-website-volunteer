@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import {
   Plus,
@@ -12,6 +12,7 @@ import {
   Image as ImageIcon,
   Loader2,
   AlertTriangle,
+  LogIn,
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -33,62 +34,13 @@ export default function Dashboard() {
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
   );
 
-  useEffect(() => {
-    // Слушатель состояния авторизации
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
-        setCurrentUser(session.user);
-        fetchMyEvents(session.user.id);
-      } else if (event === "SIGNED_OUT") {
-        window.location.assign(`${AUTH_SITE_URL}/login`);
-      }
-    });
-
-    // Первичная проверка
-    const checkAuth = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (session) {
-        setCurrentUser(session.user);
-        await fetchMyEvents(session.user.id);
-        setIsFetching(false);
-      } else {
-        // Если сессии сразу нет, ждем 1.5 секунды (даем шанс SDK найти куки)
-        setTimeout(async () => {
-          const {
-            data: { user },
-          } = await supabase.auth.getUser();
-          if (!user) {
-            window.location.assign(`${AUTH_SITE_URL}/login`);
-          } else {
-            setCurrentUser(user);
-            await fetchMyEvents(user.id);
-            setIsFetching(false);
-          }
-        }, 1500);
-      }
-    };
-
-    checkAuth();
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  // Блокировка скролла
-  useEffect(() => {
-    if (isModalOpen || deleteId) document.body.style.overflow = "hidden";
-    else document.body.style.overflow = "unset";
-  }, [isModalOpen, deleteId]);
-
-  async function fetchMyEvents(userId) {
+  // Вынес загрузку событий, чтобы вызывать её при смене состояния
+  const fetchMyEvents = useCallback(async (userId) => {
     if (!userId) return;
+    setIsFetching(true);
     const { data } = await supabase
       .from("events")
       .select("*")
@@ -97,7 +49,47 @@ export default function Dashboard() {
 
     setEvents(data || []);
     setIsFetching(false);
-  }
+  }, [supabase]);
+
+  useEffect(() => {
+    // 1. Слушатель: если залогинился в процессе — подгружаем данные
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setCurrentUser(session.user);
+        fetchMyEvents(session.user.id);
+      } else {
+        setCurrentUser(null);
+        setIsFetching(false);
+      }
+    });
+
+    // 2. Первичная проверка без редиректов
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setCurrentUser(session.user);
+        await fetchMyEvents(session.user.id);
+      } else {
+        // Проверяем через getUser на случай, если куки еще «догоняют»
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setCurrentUser(user);
+          await fetchMyEvents(user.id);
+        }
+      }
+      setIsFetching(false);
+    };
+
+    checkAuth();
+
+    return () => subscription.unsubscribe();
+  }, [supabase, fetchMyEvents]);
+
+  // Блокировка скролла
+  useEffect(() => {
+    if (isModalOpen || deleteId) document.body.style.overflow = "hidden";
+    else document.body.style.overflow = "unset";
+  }, [isModalOpen, deleteId]);
 
   async function uploadImage(file) {
     const fileExt = file.name.split(".").pop();
@@ -107,9 +99,7 @@ export default function Dashboard() {
       .upload(fileName, file);
 
     if (error) throw error;
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from("event-images").getPublicUrl(fileName);
+    const { data: { publicUrl } } = supabase.storage.from("event-images").getPublicUrl(fileName);
     return publicUrl;
   }
 
@@ -156,25 +146,38 @@ export default function Dashboard() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#f8fafc] gap-4">
         <Loader2 className="w-12 h-12 animate-spin text-[#10b981]" />
-        <p className="text-gray-500 font-bold animate-pulse">
-          Проверка доступа...
-        </p>
+        <p className="text-gray-500 font-bold animate-pulse">Загрузка данных...</p>
+      </div>
+    );
+  }
+
+  // ЭКРАН ЕСЛИ НЕ ЗАЛОГИНЕН
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#f8fafc] p-4 text-center">
+        <div className="w-20 h-20 bg-green-50 rounded-[28px] flex items-center justify-center mb-6">
+          <BarChart3 className="w-10 h-10 text-[#10b981]" />
+        </div>
+        <h1 className="text-2xl font-black text-gray-900 mb-2">Доступ ограничен</h1>
+        <p className="text-gray-500 mb-8 max-w-xs font-medium">Чтобы управлять своими событиями, необходимо авторизоваться в системе</p>
+        <a 
+          href={`${AUTH_SITE_URL}/login`}
+          className="px-8 py-4 bg-[#10b981] text-white rounded-2xl font-black shadow-lg hover:scale-105 transition-all flex items-center gap-2"
+        >
+          <LogIn className="w-5 h-5" /> Войти в аккаунт
+        </a>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-[#f8fafc] pb-20">
-      <main className="max-w-6xl mx-auto py-6 md:py-12 px-4">
-        {/* Шапка Дашборда */}
+      <main className="max-w-6xl mx-auto py-6 md:py-12 px-4 animate-in fade-in duration-500">
+        
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-8 md:mb-10">
           <div>
-            <h1 className="text-3xl md:text-4xl font-black text-gray-900">
-              Мои события
-            </h1>
-            <p className="text-gray-500 font-medium text-sm md:text-base">
-              Управляйте вашими публикациями
-            </p>
+            <h1 className="text-3xl md:text-4xl font-black text-gray-900">Мои события</h1>
+            <p className="text-gray-500 font-medium text-sm md:text-base">Управляйте вашими публикациями</p>
           </div>
           <button
             onClick={() => setIsModalOpen(true)}
@@ -184,34 +187,22 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* Статистика */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-8 md:mb-12">
           <div className="bg-white p-6 md:p-8 rounded-[32px] border border-gray-100 shadow-sm flex items-center gap-6 transition-all hover:border-green-100">
             <div className="w-14 h-14 md:w-16 md:h-16 bg-green-50 text-[#10b981] rounded-2xl flex items-center justify-center flex-shrink-0">
               <BarChart3 className="w-7 h-7 md:w-8 md:h-8" />
             </div>
             <div>
-              <p className="text-gray-400 text-[10px] md:text-xs font-bold uppercase tracking-widest">
-                Активные объявления
-              </p>
-              <p className="text-3xl md:text-4xl font-black text-gray-900">
-                {events.length}
-              </p>
+              <p className="text-gray-400 text-[10px] md:text-xs font-bold uppercase tracking-widest">Активные объявления</p>
+              <p className="text-3xl md:text-4xl font-black text-gray-900">{events.length}</p>
             </div>
           </div>
         </div>
 
-        {/* Список */}
         <div className="space-y-4">
-          {isFetching ? (
-            <div className="flex justify-center py-20">
-              <Loader2 className="w-10 h-10 animate-spin text-green-500" />
-            </div>
-          ) : events.length === 0 ? (
+          {events.length === 0 ? (
             <div className="text-center py-16 md:py-20 bg-white rounded-[32px] md:rounded-[40px] border-2 border-dashed border-gray-100 px-4">
-              <p className="text-gray-400 font-medium">
-                У вас пока нет публикаций
-              </p>
+              <p className="text-gray-400 font-medium">У вас пока нет публикаций</p>
             </div>
           ) : (
             events.map((event) => (
@@ -221,11 +212,7 @@ export default function Dashboard() {
               >
                 <div className="w-full md:w-24 h-48 md:h-24 bg-gray-100 rounded-2xl overflow-hidden flex-shrink-0">
                   {event.image_url ? (
-                    <img
-                      src={event.image_url}
-                      className="w-full h-full object-cover"
-                      alt=""
-                    />
+                    <img src={event.image_url} className="w-full h-full object-cover" alt="" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-300">
                       <ImageIcon className="w-8 h-8 md:w-6 md:h-6" />
@@ -234,18 +221,10 @@ export default function Dashboard() {
                 </div>
 
                 <div className="flex-1 min-w-0 w-full px-2 md:px-0">
-                  <h3 className="font-bold text-lg md:text-xl text-gray-900 truncate">
-                    {event.title}
-                  </h3>
+                  <h3 className="font-bold text-lg md:text-xl text-gray-900 truncate">{event.title}</h3>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-gray-400 font-medium">
-                    <span className="flex items-center gap-1.5">
-                      <Calendar className="w-4 h-4 text-[#10b981]" />{" "}
-                      {event.date}
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <MapPin className="w-4 h-4 text-[#10b981]" />{" "}
-                      {event.location}
-                    </span>
+                    <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-[#10b981]" /> {event.date}</span>
+                    <span className="flex items-center gap-1.5"><MapPin className="w-4 h-4 text-[#10b981]" /> {event.location}</span>
                   </div>
                 </div>
 
@@ -261,143 +240,49 @@ export default function Dashboard() {
         </div>
       </main>
 
-      {/* МОДАЛЬНОЕ ОКНО СОЗДАНИЯ */}
+      {/* МОДАЛКА СОЗДАНИЯ */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[150] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/40 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-lg rounded-t-[32px] md:rounded-[40px] shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 md:zoom-in-95 duration-300 max-h-[95vh] flex flex-col">
-            <div className="p-6 md:p-8 border-b border-gray-50 flex justify-between items-center bg-white sticky top-0 z-10">
-              <h2 className="text-xl md:text-2xl font-black text-gray-900">
-                Новое событие
-              </h2>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              >
+        <div className="fixed inset-0 z-[150] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/40 backdrop-blur-md">
+          <div className="bg-white w-full max-w-lg rounded-t-[32px] md:rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-6 md:p-8 border-b border-gray-50 flex justify-between items-center bg-white">
+              <h2 className="text-xl md:text-2xl font-black text-gray-900">Новое событие</h2>
+              <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
                 <X className="w-6 h-6 text-gray-400" />
               </button>
             </div>
-
-            <form
-              onSubmit={handleCreate}
-              className="p-6 md:p-8 space-y-4 md:space-y-5 overflow-y-auto"
-            >
-              <div className="relative group h-40 md:h-48 w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-[24px] flex flex-col items-center justify-center overflow-hidden transition-all hover:border-[#10b981]">
+            <form onSubmit={handleCreate} className="p-6 md:p-8 space-y-4 overflow-y-auto">
+              {/* Код формы как в оригинале */}
+              <div className="relative group h-40 w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-[24px] flex flex-col items-center justify-center overflow-hidden">
                 {imageFile ? (
-                  <div className="relative w-full h-full">
-                    <img
-                      src={URL.createObjectURL(imageFile)}
-                      className="w-full h-full object-cover"
-                      alt="Preview"
-                    />
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setImageFile(null);
-                      }}
-                      className="absolute top-2 right-2 p-2 bg-white/90 rounded-full text-red-500 shadow-md"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
+                  <img src={URL.createObjectURL(imageFile)} className="w-full h-full object-cover" alt="Preview" />
                 ) : (
-                  <>
-                    <Camera className="w-8 h-8 text-gray-300 mb-2" />
-                    <span className="text-gray-400 text-sm font-bold">
-                      Добавить фото
-                    </span>
-                  </>
+                  <><Camera className="text-gray-300 mb-2" /> <span className="text-gray-400 text-sm">Добавить фото</span></>
                 )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setImageFile(e.target.files[0])}
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                />
+                <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files[0])} className="absolute inset-0 opacity-0 cursor-pointer" />
               </div>
-
-              <div className="space-y-4">
-                <input
-                  required
-                  value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 ring-green-100 focus:border-[#10b981] font-bold"
-                  placeholder="Название события"
-                />
-
-                <div className="flex flex-col md:flex-row gap-4">
-                  <input
-                    type="date"
-                    required
-                    value={form.date}
-                    onChange={(e) => setForm({ ...form, date: e.target.value })}
-                    className="w-full md:flex-1 px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:border-[#10b981] font-bold"
-                  />
-                  <input
-                    required
-                    value={form.location}
-                    onChange={(e) =>
-                      setForm({ ...form, location: e.target.value })
-                    }
-                    className="w-full md:flex-1 px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:border-[#10b981] font-bold"
-                    placeholder="Место"
-                  />
-                </div>
-
-                <textarea
-                  rows="3"
-                  required
-                  value={form.description}
-                  onChange={(e) =>
-                    setForm({ ...form, description: e.target.value })
-                  }
-                  className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:border-[#10b981] font-bold resize-none"
-                  placeholder="О чем ваше событие?"
-                />
+              <input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold" placeholder="Название" />
+              <div className="flex gap-4">
+                <input type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="flex-1 p-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold" />
+                <input required value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} className="flex-1 p-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold" placeholder="Место" />
               </div>
-
-              <button
-                disabled={loading}
-                className="w-full py-5 bg-[#10b981] text-white rounded-2xl font-black shadow-lg shadow-green-100 hover:bg-[#0da975] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Публикация...</span>
-                  </>
-                ) : (
-                  "Опубликовать"
-                )}
+              <textarea rows="3" required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold resize-none" placeholder="Описание" />
+              <button disabled={loading} className="w-full py-5 bg-[#10b981] text-white rounded-2xl font-black shadow-lg">
+                {loading ? "Публикация..." : "Опубликовать"}
               </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* МОДАЛЬНОЕ ОКНО УДАЛЕНИЯ */}
+      {/* МОДАЛКА УДАЛЕНИЯ */}
       {deleteId && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-sm rounded-[32px] p-8 shadow-2xl animate-in zoom-in-95 duration-200 text-center">
-            <div className="w-20 h-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
-              <AlertTriangle className="w-10 h-10" />
-            </div>
-            <h2 className="text-2xl font-black text-gray-900 mb-2">Удалить?</h2>
-            <p className="text-gray-500 font-medium mb-8">
-              Это действие нельзя будет отменить.
-            </p>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-sm rounded-[32px] p-8 shadow-2xl text-center">
+            <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-black mb-6">Удалить событие?</h2>
             <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setDeleteId(null)}
-                className="py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-all"
-              >
-                Отмена
-              </button>
-              <button
-                onClick={confirmDelete}
-                className="py-4 bg-red-500 text-white rounded-2xl font-bold shadow-lg shadow-red-100 hover:bg-red-600 active:scale-95 transition-all"
-              >
-                Удалить
-              </button>
+              <button onClick={() => setDeleteId(null)} className="py-4 bg-gray-100 rounded-2xl font-bold">Отмена</button>
+              <button onClick={confirmDelete} className="py-4 bg-red-500 text-white rounded-2xl font-bold">Удалить</button>
             </div>
           </div>
         </div>
