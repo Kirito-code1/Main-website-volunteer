@@ -38,47 +38,45 @@ export default function ProfilePage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
   );
 
-  useEffect(() => {
-    const checkUser = async () => {
-      try {
-        // 1. Сначала пробуем получить сессию из локального хранилища/кук (это мгновенно)
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession();
+useEffect(() => {
+  // 1. Создаем подписку на изменение состояния авторизации
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_OUT' || !session) {
+      // Только если событие говорит, что выхода нет или сессия пуста ПОСЛЕ проверки
+      window.location.assign(`${AUTH_SITE_URL}/login`);
+    } else if (session) {
+      // Если сессия появилась/существует
+      setUser(session.user);
+      setNewName(session.user.user_metadata?.full_name || "");
+      setNewPhone(session.user.user_metadata?.phone || "");
+      setLoading(false);
+    }
+  });
 
-        if (session?.user) {
-          setUser(session.user);
-          setNewName(session.user.user_metadata?.full_name || "");
-          setNewPhone(session.user.user_metadata?.phone || "");
-          setLoading(false);
-          return; // Юзер найден, выходим из функции
-        }
+  // 2. Первичная проверка (чтобы не ждать события, если сессия уже готова)
+  async function initialCheck() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      setUser(session.user);
+      setNewName(session.user.user_metadata?.full_name || "");
+      setNewPhone(session.user.user_metadata?.phone || "");
+      setLoading(false);
+    } else {
+      // Даем небольшую задержку, прежде чем выкидывать (на случай медленного SDK)
+      setTimeout(async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) window.location.assign(`${AUTH_SITE_URL}/login`);
+      }, 1000);
+    }
+  }
 
-        // 2. Если сессии нет, на всякий случай перепроверяем через серверный getUser
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
+  initialCheck();
 
-        if (user) {
-          setUser(user);
-          setNewName(user.user_metadata?.full_name || "");
-          setNewPhone(user.user_metadata?.phone || "");
-        } else {
-          // 3. Только если ВООБЩЕ ничего не помогло — тогда редирект
-          window.location.href =
-            "https://main-website-volunteer.vercel.app/login";
-        }
-      } catch (err) {
-        console.error("Auth error:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkUser();
-  }, [supabase]);
+  // Очищаем подписку при удалении компонента
+  return () => {
+    subscription.unsubscribe();
+  };
+}, []);
 
   const handleAvatarUpload = async (e) => {
     try {
