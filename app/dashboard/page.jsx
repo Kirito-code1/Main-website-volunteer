@@ -1,289 +1,116 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import {
-  Plus,
-  Trash2,
-  Calendar,
-  MapPin,
-  BarChart3,
-  X,
-  Camera,
-  Image as ImageIcon,
-  Loader2,
-  AlertTriangle,
-  LogIn,
+  User, Mail, Edit3, LogOut, ShieldCheck, Camera, CalendarDays, Loader2, Trash2, AlertTriangle, Phone,
 } from "lucide-react";
 
-export default function Dashboard() {
-  const [events, setEvents] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [deleteId, setDeleteId] = useState(null);
-  const [form, setForm] = useState({
-    title: "",
-    description: "",
-    date: "",
-    location: "",
-  });
-  const [imageFile, setImageFile] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [isFetching, setIsFetching] = useState(true);
-  const [currentUser, setCurrentUser] = useState(null);
+export default function ProfilePage() {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const AUTH_SITE_URL = "https://main-website-volunteer.vercel.app";
-
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "",
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
   );
 
-  // Вынес загрузку событий, чтобы вызывать её при смене состояния
-  const fetchMyEvents = useCallback(async (userId) => {
-    if (!userId) return;
-    setIsFetching(true);
-    const { data } = await supabase
-      .from("events")
-      .select("*")
-      .eq("organization_id", userId)
-      .order("created_at", { ascending: false });
-
-    setEvents(data || []);
-    setIsFetching(false);
-  }, [supabase]);
+  // Функция получения данных, которую мы вызываем везде
+  const fetchUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      setUser(user);
+      setNewName(user.user_metadata?.full_name || "");
+      setNewPhone(user.user_metadata?.phone || "");
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
-    // 1. Слушатель: если залогинился в процессе — подгружаем данные
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        setCurrentUser(session.user);
-        fetchMyEvents(session.user.id);
-      } else {
-        setCurrentUser(null);
-        setIsFetching(false);
-      }
-    });
+    fetchUser();
+  }, []);
 
-    // 2. Первичная проверка без редиректов
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setCurrentUser(session.user);
-        await fetchMyEvents(session.user.id);
-      } else {
-        // Проверяем через getUser на случай, если куки еще «догоняют»
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          setCurrentUser(user);
-          await fetchMyEvents(user.id);
-        }
-      }
-      setIsFetching(false);
-    };
-
-    checkAuth();
-
-    return () => subscription.unsubscribe();
-  }, [supabase, fetchMyEvents]);
-
-  // Блокировка скролла
-  useEffect(() => {
-    if (isModalOpen || deleteId) document.body.style.overflow = "hidden";
-    else document.body.style.overflow = "unset";
-  }, [isModalOpen, deleteId]);
-
-  async function uploadImage(file) {
-    const fileExt = file.name.split(".").pop();
-    const fileName = `${Math.random()}.${fileExt}`;
-    const { data, error } = await supabase.storage
-      .from("event-images")
-      .upload(fileName, file);
-
-    if (error) throw error;
-    const { data: { publicUrl } } = supabase.storage.from("event-images").getPublicUrl(fileName);
-    return publicUrl;
-  }
-
-  const handleCreate = async (e) => {
-    e.preventDefault();
-    if (!currentUser) return;
-    setLoading(true);
+  const handleAvatarUpload = async (e) => {
     try {
-      let publicImageUrl = "";
-      if (imageFile) {
-        publicImageUrl = await uploadImage(imageFile);
-      }
-
-      const { error } = await supabase.from("events").insert([
-        {
-          ...form,
-          organization_id: currentUser.id,
-          author_name: currentUser.user_metadata?.full_name || "Организация",
-          image_url: publicImageUrl,
-        },
-      ]);
-
-      if (error) throw error;
-
-      setForm({ title: "", description: "", date: "", location: "" });
-      setImageFile(null);
-      setIsModalOpen(false);
-      fetchMyEvents(currentUser.id);
+      setUploading(true);
+      const file = e.target.files[0];
+      if (!file) return;
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${user.id}-${Math.random()}.${fileExt}`;
+      await supabase.storage.from("avatars").upload(fileName, file);
+      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(fileName);
+      await supabase.auth.updateUser({ data: { avatar_url: publicUrl } });
+      await fetchUser();
     } catch (error) {
-      alert("Ошибка: " + error.message);
+      console.error(error);
     } finally {
-      setLoading(false);
+      setUploading(false);
     }
   };
 
-  const confirmDelete = async () => {
-    if (!deleteId || !currentUser) return;
-    await supabase.from("events").delete().eq("id", deleteId);
-    setDeleteId(null);
-    fetchMyEvents(currentUser.id);
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    setIsSaving(true);
+    const { error } = await supabase.auth.updateUser({
+      data: { full_name: newName, phone: newPhone },
+    });
+    if (!error) {
+      await fetchUser();
+      setIsEditModalOpen(false);
+    }
+    setIsSaving(false);
   };
 
-  if (isFetching) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#f8fafc] gap-4">
-        <Loader2 className="w-12 h-12 animate-spin text-[#10b981]" />
-        <p className="text-gray-500 font-bold animate-pulse">Загрузка данных...</p>
-      </div>
-    );
-  }
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.href = `${AUTH_SITE_URL}/login`;
+  };
 
-  // ЭКРАН ЕСЛИ НЕ ЗАЛОГИНЕН
-  if (!currentUser) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#f8fafc] p-4 text-center">
-        <div className="w-20 h-20 bg-green-50 rounded-[28px] flex items-center justify-center mb-6">
-          <BarChart3 className="w-10 h-10 text-[#10b981]" />
-        </div>
-        <h1 className="text-2xl font-black text-gray-900 mb-2">Доступ ограничен</h1>
-        <p className="text-gray-500 mb-8 max-w-xs font-medium">Чтобы управлять своими событиями, необходимо авторизоваться в системе</p>
-        <a 
-          href={`${AUTH_SITE_URL}/login`}
-          className="px-8 py-4 bg-[#10b981] text-white rounded-2xl font-black shadow-lg hover:scale-105 transition-all flex items-center gap-2"
-        >
-          <LogIn className="w-5 h-5" /> Войти в аккаунт
-        </a>
-      </div>
-    );
-  }
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]"><Loader2 className="animate-spin text-[#10b981]" /></div>;
+  if (!user) { window.location.href = `${AUTH_SITE_URL}/login`; return null; }
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] pb-20">
-      <main className="max-w-6xl mx-auto py-6 md:py-12 px-4 animate-in fade-in duration-500">
-        
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-8 md:mb-10">
-          <div>
-            <h1 className="text-3xl md:text-4xl font-black text-gray-900">Мои события</h1>
-            <p className="text-gray-500 font-medium text-sm md:text-base">Управляйте вашими публикациями</p>
-          </div>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="w-full md:w-auto flex items-center justify-center gap-2 bg-[#10b981] text-white px-8 py-4 rounded-2xl font-bold shadow-lg shadow-green-100 hover:scale-105 active:scale-95 transition-all"
-          >
-            <Plus className="w-5 h-5" /> Создать событие
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-8 md:mb-12">
-          <div className="bg-white p-6 md:p-8 rounded-[32px] border border-gray-100 shadow-sm flex items-center gap-6 transition-all hover:border-green-100">
-            <div className="w-14 h-14 md:w-16 md:h-16 bg-green-50 text-[#10b981] rounded-2xl flex items-center justify-center flex-shrink-0">
-              <BarChart3 className="w-7 h-7 md:w-8 md:h-8" />
+    <div className="min-h-screen bg-[#f8fafc] pb-10">
+      <div className="max-w-3xl mx-auto py-12 px-4">
+        <div className="bg-white rounded-[40px] shadow-sm border border-gray-100 overflow-hidden mb-8">
+          <div className="h-40 bg-gradient-to-br from-[#10b981] to-[#3b82f6]" />
+          <div className="px-10 pb-10">
+            <div className="relative -mt-20 mb-6 flex justify-between items-end">
+              <div className="w-40 h-40 bg-white rounded-[38px] p-1.5 shadow-2xl overflow-hidden relative">
+                {user.user_metadata?.avatar_url ? <img src={user.user_metadata.avatar_url} className="w-full h-full object-cover rounded-[32px]" /> : <User className="w-full h-full p-8 text-gray-200" />}
+                <label className="absolute bottom-2 right-2 p-3 bg-[#10b981] text-white rounded-2xl cursor-pointer"><Camera className="w-5 h-5" /><input type="file" className="hidden" onChange={handleAvatarUpload} /></label>
+              </div>
+              <button onClick={() => setIsEditModalOpen(true)} className="px-8 py-4 bg-gray-900 text-white rounded-[22px] font-black">Настроить</button>
             </div>
-            <div>
-              <p className="text-gray-400 text-[10px] md:text-xs font-bold uppercase tracking-widest">Активные объявления</p>
-              <p className="text-3xl md:text-4xl font-black text-gray-900">{events.length}</p>
-            </div>
+            <h1 className="text-4xl font-black text-gray-900">{user.user_metadata?.full_name || "Участник"}</h1>
           </div>
         </div>
-
-        <div className="space-y-4">
-          {events.length === 0 ? (
-            <div className="text-center py-16 md:py-20 bg-white rounded-[32px] md:rounded-[40px] border-2 border-dashed border-gray-100 px-4">
-              <p className="text-gray-400 font-medium">У вас пока нет публикаций</p>
-            </div>
-          ) : (
-            events.map((event) => (
-              <div
-                key={event.id}
-                className="bg-white p-4 rounded-[28px] md:rounded-[32px] border border-gray-100 flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-6 group hover:shadow-md transition-all relative"
-              >
-                <div className="w-full md:w-24 h-48 md:h-24 bg-gray-100 rounded-2xl overflow-hidden flex-shrink-0">
-                  {event.image_url ? (
-                    <img src={event.image_url} className="w-full h-full object-cover" alt="" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-300">
-                      <ImageIcon className="w-8 h-8 md:w-6 md:h-6" />
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex-1 min-w-0 w-full px-2 md:px-0">
-                  <h3 className="font-bold text-lg md:text-xl text-gray-900 truncate">{event.title}</h3>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-gray-400 font-medium">
-                    <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-[#10b981]" /> {event.date}</span>
-                    <span className="flex items-center gap-1.5"><MapPin className="w-4 h-4 text-[#10b981]" /> {event.location}</span>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => setDeleteId(event.id)}
-                  className="md:mr-4 p-4 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all self-end md:self-auto"
-                >
-                  <Trash2 className="w-6 h-6" />
-                </button>
-              </div>
-            ))
-          )}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white p-8 rounded-[35px] border border-gray-100 shadow-sm space-y-4">
+            <p className="text-gray-400 font-black uppercase text-[10px]">Почта</p>
+            <p className="font-bold">{user.email}</p>
+          </div>
+          <div className="bg-white p-8 rounded-[35px] border border-gray-100 shadow-sm">
+             <button onClick={handleLogout} className="w-full py-4 bg-gray-50 text-gray-900 rounded-[22px] font-black">Выйти</button>
+          </div>
         </div>
-      </main>
-
-      {/* МОДАЛКА СОЗДАНИЯ */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[150] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/40 backdrop-blur-md">
-          <div className="bg-white w-full max-w-lg rounded-t-[32px] md:rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-6 md:p-8 border-b border-gray-50 flex justify-between items-center bg-white">
-              <h2 className="text-xl md:text-2xl font-black text-gray-900">Новое событие</h2>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                <X className="w-6 h-6 text-gray-400" />
-              </button>
-            </div>
-            <form onSubmit={handleCreate} className="p-6 md:p-8 space-y-4 overflow-y-auto">
-              {/* Код формы как в оригинале */}
-              <div className="relative group h-40 w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-[24px] flex flex-col items-center justify-center overflow-hidden">
-                {imageFile ? (
-                  <img src={URL.createObjectURL(imageFile)} className="w-full h-full object-cover" alt="Preview" />
-                ) : (
-                  <><Camera className="text-gray-300 mb-2" /> <span className="text-gray-400 text-sm">Добавить фото</span></>
-                )}
-                <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files[0])} className="absolute inset-0 opacity-0 cursor-pointer" />
-              </div>
-              <input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold" placeholder="Название" />
-              <div className="flex gap-4">
-                <input type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="flex-1 p-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold" />
-                <input required value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} className="flex-1 p-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold" placeholder="Место" />
-              </div>
-              <textarea rows="3" required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl font-bold resize-none" placeholder="Описание" />
-              <button disabled={loading} className="w-full py-5 bg-[#10b981] text-white rounded-2xl font-black shadow-lg">
-                {loading ? "Публикация..." : "Опубликовать"}
-              </button>
+      </div>
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-md">
+          <div className="bg-white w-full max-w-md rounded-[40px] p-8 shadow-2xl">
+            <form onSubmit={handleUpdateProfile} className="space-y-4">
+              <input value={newName} onChange={(e) => setNewName(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl border" placeholder="Имя" />
+              <input value={newPhone} onChange={(e) => setNewPhone(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl border" placeholder="Телефон" />
+              <button className="w-full py-4 bg-[#10b981] text-white rounded-2xl font-black">Сохранить</button>
+              <button type="button" onClick={() => setIsEditModalOpen(false)} className="w-full text-gray-400 font-bold">Отмена</button>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* МОДАЛКА УДАЛЕНИЯ */}
-      {deleteId && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-sm rounded-[32px] p-8 shadow-2xl text-center">
-            <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-black mb-6">Удалить событие?</h2>
-            <div className="grid grid-cols-2 gap-3">
-              <button onClick={() => setDeleteId(null)} className="py-4 bg-gray-100 rounded-2xl font-bold">Отмена</button>
-              <button onClick={confirmDelete} className="py-4 bg-red-500 text-white rounded-2xl font-bold">Удалить</button>
-            </div>
           </div>
         </div>
       )}
