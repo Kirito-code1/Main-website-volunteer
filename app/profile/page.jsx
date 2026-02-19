@@ -26,12 +26,11 @@ export default function ProfilePage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const [newName, setNewName] = useState("");
-  const [newPhone, setNewPhone] = useState(""); // Новое состояние для телефона
+  const [newPhone, setNewPhone] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Актуальный URL вашего сайта на Vercel
   const AUTH_SITE_URL = "https://main-website-volunteer.vercel.app";
 
   const supabase = createBrowserClient(
@@ -45,19 +44,13 @@ export default function ProfilePage() {
 
   async function fetchUser() {
     try {
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser();
+      const { data: { user }, error } = await supabase.auth.getUser();
 
       if (error || !user) {
-        // Если пользователя нет — только тогда на логин
-        console.log("Пользователь не найден, редирект...");
         window.location.assign(`${AUTH_SITE_URL}/login`);
         return;
       }
 
-      // Если пользователь есть — сохраняем и выключаем лоадер
       setUser(user);
       setNewName(user.user_metadata?.full_name || "");
       setNewPhone(user.user_metadata?.phone || "");
@@ -83,9 +76,7 @@ export default function ProfilePage() {
 
       if (uploadError) throw uploadError;
 
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("avatars").getPublicUrl(fileName);
+      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(fileName);
 
       const { error: updateError } = await supabase.auth.updateUser({
         data: { avatar_url: publicUrl },
@@ -104,10 +95,7 @@ export default function ProfilePage() {
     e.preventDefault();
     setIsSaving(true);
     const { error } = await supabase.auth.updateUser({
-      data: {
-        full_name: newName,
-        phone: newPhone,
-      },
+      data: { full_name: newName, phone: newPhone },
     });
 
     if (!error) {
@@ -125,10 +113,8 @@ export default function ProfilePage() {
   const confirmDeleteAccount = async () => {
     try {
       setIsDeleting(true);
-      // Предполагается, что у вас есть RPC функция delete_user в Supabase
       const { error } = await supabase.rpc("delete_user");
       if (error) throw error;
-
       await supabase.auth.signOut();
       window.location.href = `${AUTH_SITE_URL}/login`;
     } catch (error) {
@@ -155,16 +141,16 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] pb-20">
-      <div className="max-w-3xl mx-auto py-12 px-4">
+    <div className="min-h-screen bg-[#f8fafc] pb-10 md:pb-20">
+      <div className="max-w-3xl mx-auto py-6 md:py-12 px-4">
         {/* ШАПКА ПРОФИЛЯ */}
-        <div className="bg-white rounded-[40px] shadow-sm border border-gray-100 overflow-hidden mb-8">
-          <div className="h-40 bg-gradient-to-br from-[#10b981] via-[#059669] to-[#3b82f6]" />
-          <div className="px-10 pb-10">
-            <div className="relative -mt-20 mb-8 flex justify-between items-end">
+        <div className="bg-white rounded-[30px] md:rounded-[40px] shadow-sm border border-gray-100 overflow-hidden mb-6 md:mb-8">
+          <div className="h-32 md:h-40 bg-gradient-to-br from-[#10b981] via-[#059669] to-[#3b82f6]" />
+          <div className="px-6 md:px-10 pb-8 md:pb-10">
+            <div className="relative -mt-16 md:-mt-20 mb-6 flex flex-col md:flex-row justify-between items-center md:items-end gap-4">
               <div className="relative group">
-                <div className="w-40 h-40 bg-white rounded-[38px] p-1.5 shadow-2xl transition-transform group-hover:scale-[1.01]">
-                  <div className="w-full h-full bg-gray-100 rounded-[32px] overflow-hidden flex items-center justify-center relative">
+                <div className="w-32 h-32 md:w-40 md:h-40 bg-white rounded-[28px] md:rounded-[38px] p-1.5 shadow-2xl transition-transform group-hover:scale-[1.01]">
+                  <div className="w-full h-full bg-gray-100 rounded-[24px] md:rounded-[32px] overflow-hidden flex items-center justify-center relative">
                     {user.user_metadata?.avatar_url ? (
                       <img
                         src={user.user_metadata.avatar_url}
@@ -172,17 +158,17 @@ export default function ProfilePage() {
                         alt="Avatar"
                       />
                     ) : (
-                      <User className="w-20 h-20 text-gray-300" />
+                      <User className="w-12 h-12 md:w-20 md:h-20 text-gray-300" />
                     )}
                     {uploading && (
                       <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                        <Loader2 className="animate-spin text-white w-8 h-8" />
+                        <Loader2 className="animate-spin text-white w-6 h-6 md:w-8 md:h-8" />
                       </div>
                     )}
                   </div>
                 </div>
-                <label className="absolute bottom-2 right-2 p-3 bg-[#10b981] text-white rounded-2xl shadow-xl cursor-pointer hover:bg-[#0da975] transition-all hover:scale-110 active:scale-90">
-                  <Camera className="w-5 h-5" />
+                <label className="absolute bottom-1 right-1 md:bottom-2 md:right-2 p-2.5 md:p-3 bg-[#10b981] text-white rounded-xl md:rounded-2xl shadow-xl cursor-pointer hover:bg-[#0da975] transition-all hover:scale-110 active:scale-90">
+                  <Camera className="w-4 h-4 md:w-5 md:h-5" />
                   <input
                     type="file"
                     className="hidden"
@@ -195,133 +181,86 @@ export default function ProfilePage() {
 
               <button
                 onClick={() => setIsEditModalOpen(true)}
-                className="px-8 py-4 bg-gray-900 text-white rounded-[22px] font-black hover:bg-black transition-all shadow-lg active:scale-95 flex items-center gap-2"
+                className="w-full md:w-auto px-6 md:px-8 py-3 md:py-4 bg-gray-900 text-white rounded-[18px] md:rounded-[22px] font-black hover:bg-black transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
               >
-                <Edit3 className="w-5 h-5" />
-                <span>Настроить</span>
+                <Edit3 className="w-4 h-4 md:w-5 md:h-5" />
+                <span className="text-sm md:text-base">Настроить</span>
               </button>
             </div>
 
-            <div className="space-y-2">
-              <h1 className="text-4xl font-black text-gray-900 flex items-center gap-3">
+            <div className="space-y-2 text-center md:text-left">
+              <h1 className="text-2xl md:text-4xl font-black text-gray-900 flex items-center justify-center md:justify-start gap-2 md:gap-3">
                 {user.user_metadata?.full_name || "Участник"}
-                <ShieldCheck className="w-6 h-6 text-[#10b981]" />
+                <ShieldCheck className="w-5 h-5 md:w-6 md:h-6 text-[#10b981]" />
               </h1>
-              <div className="flex items-center gap-2 text-gray-400 font-bold uppercase text-xs tracking-widest">
-                <CalendarDays className="w-4 h-4" /> На сайте с{" "}
-                {getJoinedDate()}
+              <div className="flex items-center justify-center md:justify-start gap-2 text-gray-400 font-bold uppercase text-[10px] md:text-xs tracking-widest">
+                <CalendarDays className="w-3.5 h-3.5 md:w-4 md:h-4" /> На сайте с {getJoinedDate()}
               </div>
             </div>
           </div>
         </div>
 
         {/* КАРТОЧКИ */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           {/* Контакты */}
-          <div className="bg-white p-8 rounded-[35px] border border-gray-100 shadow-sm flex flex-col gap-6 group hover:border-blue-100 transition-colors">
-            {/* Email */}
-            <div className="flex items-center gap-5 min-w-0">
-              <div className="flex-shrink-0 p-4 bg-blue-50 text-blue-600 rounded-2xl group-hover:scale-110 transition-transform">
-                <Mail className="w-6 h-6" />
+          <div className="bg-white p-6 md:p-8 rounded-[30px] md:rounded-[35px] border border-gray-100 shadow-sm flex flex-col gap-6 group hover:border-blue-100 transition-colors">
+            <div className="flex items-center gap-4 md:gap-5 min-w-0">
+              <div className="flex-shrink-0 p-3 md:p-4 bg-blue-50 text-blue-600 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform">
+                <Mail className="w-5 h-5 md:w-7 md:h-7" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] text-gray-400 font-black uppercase tracking-tighter">
-                  Почта
-                </p>
-                <p
-                  className="text-gray-900 font-bold text-base truncate"
-                  title={user.email}
-                >
-                  {user.email}
-                </p>
+                <p className="text-[9px] md:text-[10px] text-gray-400 font-black uppercase tracking-tighter">Почта</p>
+                <p className="text-gray-900 font-bold text-sm md:text-base truncate" title={user.email}>{user.email}</p>
               </div>
             </div>
 
-            {/* Phone */}
-            <div className="flex items-center gap-5 min-w-0">
-              <div className="flex-shrink-0 p-4 bg-green-50 text-[#10b981] rounded-2xl group-hover:scale-110 transition-transform">
-                <Phone className="w-6 h-6" />
+            <div className="flex items-center gap-4 md:gap-5 min-w-0">
+              <div className="flex-shrink-0 p-3 md:p-4 bg-green-50 text-[#10b981] rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform">
+                <Phone className="w-5 h-5 md:w-7 md:h-7" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] text-gray-400 font-black uppercase tracking-tighter">
-                  Телефон
-                </p>
-                <p className="text-gray-900 font-bold text-base truncate">
-                  {user.user_metadata?.phone || "Не указан"}
-                </p>
+                <p className="text-[9px] md:text-[10px] text-gray-400 font-black uppercase tracking-tighter">Телефон</p>
+                <p className="text-gray-900 font-bold text-sm md:text-base truncate">{user.user_metadata?.phone || "Не указан"}</p>
               </div>
             </div>
           </div>
 
           {/* Аккаунт */}
-          <div className="bg-white p-8 rounded-[35px] border border-gray-100 shadow-sm flex flex-col">
-            <h3 className="text-gray-900 font-black text-xl mb-1">
-              Безопасность
-            </h3>
-            <p className="text-gray-400 text-sm font-medium mb-6">
-              Управление доступом
-            </p>
-
-            <div className="space-y-3 mt-auto">
-              <button
-                onClick={handleLogout}
-                className="w-full py-4 bg-gray-50 text-gray-900 rounded-[22px] font-black hover:bg-gray-100 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-              >
-                <LogOut className="w-5 h-5" /> Выйти
+          <div className="bg-white p-6 md:p-8 rounded-[30px] md:rounded-[35px] border border-gray-100 shadow-sm flex flex-col">
+            <h3 className="text-gray-900 font-black text-lg md:text-xl mb-1">Безопасность</h3>
+            <p className="text-gray-400 text-xs md:text-sm font-medium mb-6">Управление доступом</p>
+            <div className="space-y-3 md:mt-auto">
+              <button onClick={handleLogout} className="w-full py-3.5 md:py-4 bg-gray-50 text-gray-900 rounded-[18px] md:rounded-[22px] font-black hover:bg-gray-100 transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm md:text-base">
+                <LogOut className="w-4 h-4 md:w-5 md:h-5" /> Выйти
               </button>
-              <button
-                onClick={() => setIsDeleteModalOpen(true)}
-                className="w-full py-4 border-2 border-red-50 text-red-500 rounded-[22px] font-black hover:bg-red-50 transition-all flex items-center justify-center gap-2"
-              >
-                <Trash2 className="w-5 h-5" /> Удалить
+              <button onClick={() => setIsDeleteModalOpen(true)} className="w-full py-3.5 md:py-4 border-2 border-red-50 text-red-500 rounded-[18px] md:rounded-[22px] font-black hover:bg-red-50 transition-all flex items-center justify-center gap-2 text-sm md:text-base">
+                <Trash2 className="w-4 h-4 md:w-5 md:h-5" /> Удалить
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* МОДАЛКА: РЕДАКТИРОВАНИЕ ПРОФИЛЯ */}
+      {/* МОДАЛКА: РЕДАКТИРОВАНИЕ */}
       {isEditModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden animate-in zoom-in-95">
-            <div className="p-8 border-b border-gray-50 flex justify-between items-center">
-              <h2 className="text-2xl font-black text-gray-900">Профиль</h2>
-              <button
-                onClick={() => setIsEditModalOpen(false)}
-                className="p-2 hover:bg-gray-100 rounded-full"
-              >
-                <X className="text-gray-400" />
-              </button>
+          <div className="bg-white w-full max-w-md rounded-[30px] md:rounded-[40px] shadow-2xl overflow-hidden animate-in zoom-in-95">
+            <div className="p-6 md:p-8 border-b border-gray-50 flex justify-between items-center">
+              <h2 className="text-xl md:text-2xl font-black text-gray-900">Профиль</h2>
+              <button onClick={() => setIsEditModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full"><X className="text-gray-400" /></button>
             </div>
-            <form onSubmit={handleUpdateProfile} className="p-8 space-y-5">
+            <form onSubmit={handleUpdateProfile} className="p-6 md:p-8 space-y-5">
               <div className="space-y-2">
-                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">
-                  Имя
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 ring-green-100 outline-none font-bold text-gray-900"
-                />
+                <label className="text-[10px] md:text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Имя</label>
+                <input type="text" required value={newName} onChange={(e) => setNewName(e.target.value)}
+                  className="w-full px-5 py-3.5 md:px-6 md:py-4 bg-gray-50 border border-gray-100 rounded-xl md:rounded-2xl focus:ring-2 ring-green-100 outline-none font-bold text-gray-900 text-sm md:text-base" />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">
-                  Телефон
-                </label>
-                <input
-                  type="tel"
-                  value={newPhone}
-                  onChange={(e) => setNewPhone(e.target.value)}
-                  placeholder="+7 (___) ___ __ __"
-                  className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 ring-green-100 outline-none font-bold text-gray-900"
-                />
+                <label className="text-[10px] md:text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Телефон</label>
+                <input type="tel" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="+7 (___) ___ __ __"
+                  className="w-full px-5 py-3.5 md:px-6 md:py-4 bg-gray-50 border border-gray-100 rounded-xl md:rounded-2xl focus:ring-2 ring-green-100 outline-none font-bold text-gray-900 text-sm md:text-base" />
               </div>
-              <button
-                disabled={isSaving}
-                className="w-full py-5 bg-[#10b981] text-white rounded-[22px] font-black shadow-lg shadow-green-100 active:scale-95 transition-all mt-4"
-              >
+              <button disabled={isSaving} className="w-full py-4 md:py-5 bg-[#10b981] text-white rounded-[18px] md:rounded-[22px] font-black shadow-lg shadow-green-100 active:scale-95 transition-all mt-4 text-sm md:text-base">
                 {isSaving ? "Сохранение..." : "Сохранить изменения"}
               </button>
             </form>
@@ -329,37 +268,25 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* МОДАЛКА: ПОДТВЕРЖДЕНИЕ УДАЛЕНИЯ */}
+      {/* МОДАЛКА: УДАЛЕНИЕ */}
       {isDeleteModalOpen && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden animate-in zoom-in-95">
-            <div className="p-10 text-center">
-              <div className="w-20 h-20 bg-red-50 text-red-500 rounded-[28px] flex items-center justify-center mx-auto mb-6">
-                <AlertTriangle className="w-10 h-10" />
+          <div className="bg-white w-full max-w-md rounded-[30px] md:rounded-[40px] shadow-2xl overflow-hidden animate-in zoom-in-95">
+            <div className="p-6 md:p-10 text-center">
+              <div className="w-16 h-16 md:w-20 md:h-20 bg-red-50 text-red-500 rounded-[24px] md:rounded-[28px] flex items-center justify-center mx-auto mb-6">
+                <AlertTriangle className="w-8 h-8 md:w-10 md:h-10" />
               </div>
-              <h2 className="text-2xl font-black text-gray-900 mb-3">
-                Удалить аккаунт?
-              </h2>
-              <p className="text-gray-500 font-medium leading-relaxed mb-8">
-                Это действие **необратимо**. Все ваши данные, достижения и
-                история будут удалены навсегда.
+              <h2 className="text-xl md:text-2xl font-black text-gray-900 mb-3">Удалить аккаунт?</h2>
+              <p className="text-gray-500 text-sm md:text-base font-medium leading-relaxed mb-8 px-2">
+                Это действие **необратимо**. Все ваши данные и история будут удалены навсегда.
               </p>
               <div className="flex flex-col gap-3">
-                <button
-                  onClick={confirmDeleteAccount}
-                  disabled={isDeleting}
-                  className="w-full py-5 bg-red-500 text-white rounded-[22px] font-black hover:bg-red-600 transition-all shadow-lg shadow-red-100 active:scale-95 flex items-center justify-center gap-2"
-                >
-                  {isDeleting ? (
-                    <Loader2 className="animate-spin w-5 h-5" />
-                  ) : (
-                    "Да, удалить навсегда"
-                  )}
+                <button onClick={confirmDeleteAccount} disabled={isDeleting}
+                  className="w-full py-4 md:py-5 bg-red-500 text-white rounded-[18px] md:rounded-[22px] font-black hover:bg-red-600 transition-all shadow-lg shadow-red-100 active:scale-95 flex items-center justify-center gap-2 text-sm md:text-base">
+                  {isDeleting ? <Loader2 className="animate-spin w-4 h-4 md:w-5 md:h-5" /> : "Да, удалить навсегда"}
                 </button>
-                <button
-                  onClick={() => setIsDeleteModalOpen(false)}
-                  className="w-full py-5 bg-gray-50 text-gray-500 rounded-[22px] font-black hover:bg-gray-100 transition-all"
-                >
+                <button onClick={() => setIsDeleteModalOpen(false)}
+                  className="w-full py-4 md:py-5 bg-gray-50 text-gray-500 rounded-[18px] md:rounded-[22px] font-black hover:bg-gray-100 transition-all text-sm md:text-base">
                   Отмена
                 </button>
               </div>
