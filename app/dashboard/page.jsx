@@ -1,7 +1,7 @@
 "use client";
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import { getLoginUrl, hydrateSessionFromUrl } from "../lib/auth";
+import { getLoginUrl } from "../lib/auth";
 import {
   User, Mail, Edit3, LogOut, ShieldCheck, Camera, CalendarDays, Loader2, Trash2, AlertTriangle, Phone,
 } from "lucide-react";
@@ -17,7 +17,7 @@ export default function ProfilePage() {
   const [uploading, setUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const supabase = useMemo(() => createBrowserClient(
+  const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "",
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
   ), []);
@@ -27,6 +27,8 @@ export default function ProfilePage() {
       data: { user },
     } = await supabase.auth.getUser();
 
+  const fetchUser = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       setUser(user);
       setNewName(user.user_metadata?.full_name || "");
@@ -49,13 +51,12 @@ export default function ProfilePage() {
 
       // 3. Если пусто — редирект на логин
       if (!hasSession) {
-        setLoading(false);
         window.location.href = getLoginUrl();
       }
     };
 
     handleInitialAuth();
-  }, [fetchUser, supabase]);
+  }, [fetchUser]);
 
   const handleAvatarUpload = async (e) => {
     try {

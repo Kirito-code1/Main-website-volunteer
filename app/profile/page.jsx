@@ -1,9 +1,9 @@
 "use client";
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { useRouter } from "next/navigation";
 import { User, LogOut, ShieldCheck, Camera, Loader2 } from "lucide-react";
-import { getLoginUrl, hydrateSessionFromUrl } from "../lib/auth";
+import { getLoginUrl } from "../lib/auth";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -15,7 +15,7 @@ export default function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const supabase = useMemo(() => createBrowserClient(
+  const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "",
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
   ), []);
@@ -36,12 +36,10 @@ export default function ProfilePage() {
     let isMounted = true;
 
     const init = async () => {
-      await hydrateSessionFromUrl(supabase);
       const hasUser = await fetchUser();
       if (!isMounted) return;
 
       if (!hasUser) {
-        setLoading(false);
         window.location.href = getLoginUrl();
         return;
       }
@@ -69,7 +67,7 @@ export default function ProfilePage() {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, [fetchUser, supabase]);
+  }, [fetchUser, supabase.auth]);
 
   const handleAvatarUpload = async (e) => {
     try {
