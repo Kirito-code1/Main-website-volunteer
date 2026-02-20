@@ -1,47 +1,79 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import {
-  User, Mail, Edit3, LogOut, ShieldCheck, Camera, CalendarDays, Loader2, Trash2, AlertTriangle, Phone,
-} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { User, LogOut, ShieldCheck, Camera, Loader2 } from "lucide-react";
+import { getLoginUrl } from "../lib/auth";
 
 export default function ProfilePage() {
+  const router = useRouter();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
 
-  const AUTH_SITE_URL = "https://main-website-volunteer.vercel.app";
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "",
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
   );
 
-  // Функция получения данных, которую мы вызываем везде
-  const fetchUser = async () => {
+  const fetchUser = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
+    setUser(user || null);
+
     if (user) {
-      setUser(user);
       setNewName(user.user_metadata?.full_name || "");
       setNewPhone(user.user_metadata?.phone || "");
     }
-    setLoading(false);
-  };
+
+    return Boolean(user);
+  }, [supabase]);
 
   useEffect(() => {
-    fetchUser();
-  }, []);
+    let isMounted = true;
+
+    const init = async () => {
+      const hasUser = await fetchUser();
+      if (!isMounted) return;
+
+      if (!hasUser) {
+        window.location.href = getLoginUrl();
+        return;
+      }
+
+      setLoading(false);
+    };
+
+    init();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!isMounted) return;
+
+      if (event === "SIGNED_OUT" || !session?.user) {
+        setUser(null);
+        window.location.href = getLoginUrl();
+        return;
+      }
+
+      setUser(session.user);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, [fetchUser, supabase.auth]);
 
   const handleAvatarUpload = async (e) => {
     try {
       setUploading(true);
       const file = e.target.files[0];
-      if (!file) return;
+      if (!file || !user) return;
       const fileExt = file.name.split(".").pop();
       const fileName = `${user.id}-${Math.random()}.${fileExt}`;
       await supabase.storage.from("avatars").upload(fileName, file);
@@ -70,11 +102,12 @@ export default function ProfilePage() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    window.location.href = `${AUTH_SITE_URL}/login`;
+    router.refresh();
+    window.location.href = getLoginUrl();
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]"><Loader2 className="animate-spin text-[#10b981]" /></div>;
-  if (!user) { window.location.href = `${AUTH_SITE_URL}/login`; return null; }
+  if (!user) return null;
 
   return (
     <div className="min-h-screen bg-[#f8fafc] pb-10">
@@ -84,12 +117,12 @@ export default function ProfilePage() {
           <div className="px-10 pb-10">
             <div className="relative -mt-20 mb-6 flex justify-between items-end">
               <div className="w-40 h-40 bg-white rounded-[38px] p-1.5 shadow-2xl overflow-hidden relative">
-                {user.user_metadata?.avatar_url ? <img src={user.user_metadata.avatar_url} className="w-full h-full object-cover rounded-[32px]" /> : <User className="w-full h-full p-8 text-gray-200" />}
-                <label className="absolute bottom-2 right-2 p-3 bg-[#10b981] text-white rounded-2xl cursor-pointer"><Camera className="w-5 h-5" /><input type="file" className="hidden" onChange={handleAvatarUpload} /></label>
+                {user.user_metadata?.avatar_url ? <img src={user.user_metadata.avatar_url} className="w-full h-full object-cover rounded-[32px]" alt="Фото профиля" /> : <User className="w-full h-full p-8 text-gray-200" />}
+                <label className="absolute bottom-2 right-2 p-3 bg-[#10b981] text-white rounded-2xl cursor-pointer"><Camera className="w-5 h-5" /><input type="file" className="hidden" onChange={handleAvatarUpload} disabled={uploading} /></label>
               </div>
               <button onClick={() => setIsEditModalOpen(true)} className="px-8 py-4 bg-gray-900 text-white rounded-[22px] font-black">Настроить</button>
             </div>
-            <h1 className="text-4xl font-black text-gray-900">{user.user_metadata?.full_name || "Участник"}</h1>
+            <h1 className="text-4xl font-black text-gray-900 flex items-center gap-2">{user.user_metadata?.full_name || "Участник"}<ShieldCheck className="w-6 h-6 text-[#10b981]" /></h1>
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -108,7 +141,7 @@ export default function ProfilePage() {
             <form onSubmit={handleUpdateProfile} className="space-y-4">
               <input value={newName} onChange={(e) => setNewName(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl border" placeholder="Имя" />
               <input value={newPhone} onChange={(e) => setNewPhone(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl border" placeholder="Телефон" />
-              <button className="w-full py-4 bg-[#10b981] text-white rounded-2xl font-black">Сохранить</button>
+              <button disabled={isSaving} className="w-full py-4 bg-[#10b981] text-white rounded-2xl font-black">{isSaving ? "Сохранение..." : "Сохранить"}</button>
               <button type="button" onClick={() => setIsEditModalOpen(false)} className="w-full text-gray-400 font-bold">Отмена</button>
             </form>
           </div>

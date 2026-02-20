@@ -1,10 +1,9 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import Navbar from "./components/Navbar";
 import { 
-  Calendar, MapPin, ArrowRight, User, 
-  Search, X, Info, AlignLeft, ImageIcon 
+  User, 
+  Search, X, ImageIcon 
 } from "lucide-react";
 import OrganizerProfileModal from "./components/OrganizerModal";
 
@@ -22,19 +21,34 @@ export default function HomePage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
   );
 
-  useEffect(() => { fetchEvents(); }, []);
+  const fetchEvents = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("events")
+      .select("*")
+      .order("date", { ascending: true });
 
-  async function fetchEvents() {
-    // Выбираем все данные. Убедись, что в селекте есть колонка с ID автора!
-    const { data } = await supabase.from('events').select('*').order('date', { ascending: true });
+    if (error) {
+      console.error("Failed to fetch events:", error.message);
+      setEvents([]);
+      setLoading(false);
+      return;
+    }
+
     setEvents(data || []);
     setLoading(false);
-  }
+  }, [supabase]);
 
-  const filtered = events.filter(e => 
-    e.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    e.location.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchEvents();
+  }, [fetchEvents]);
+
+  const filtered = events.filter((e) => {
+    const title = (e.title || "").toLowerCase();
+    const location = (e.location || "").toLowerCase();
+    const query = searchTerm.toLowerCase();
+    return title.includes(query) || location.includes(query);
+  });
 
   const openOrganizer = (id) => {
     if (!id) {
@@ -48,7 +62,6 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans">
       <div className="max-w-6xl mx-auto pt-16 px-4">
-        {/* Поиск */}
         <div className="text-center mb-16">
           <h1 className="text-5xl md:text-6xl font-black text-gray-900 mb-6 tracking-tight">
             Открой для себя <span className="text-[#10b981]">события</span>
@@ -63,16 +76,15 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Сетка */}
         {loading ? (
           <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-[#10b981]"></div></div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
-            {filtered.map(event => (
+            {filtered.map((event) => (
               <div key={event.id} className="group bg-white rounded-[35px] border border-gray-100 p-2 hover:shadow-2xl transition-all duration-500">
                 <div className="h-52 bg-gray-100 rounded-[28px] relative overflow-hidden mb-6">
                   {event.image_url ? (
-                    <img src={event.image_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt="" />
+                    <img src={event.image_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={event.title || "Изображение события"} />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-green-50 text-green-200"><ImageIcon className="w-12 h-12" /></div>
                   )}
@@ -99,12 +111,11 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Модалка события */}
       {selectedEvent && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
           <div className="bg-white w-full max-w-2xl rounded-[45px] overflow-hidden max-h-[90vh] overflow-y-auto">
             <div className="h-64 relative">
-              <img src={selectedEvent.image_url} className="w-full h-full object-cover" alt="" />
+              <img src={selectedEvent.image_url} className="w-full h-full object-cover" alt={selectedEvent.title || "Обложка события"} />
               <button onClick={() => setSelectedEvent(null)} className="absolute top-6 right-6 p-3 bg-white/20 backdrop-blur-xl rounded-2xl"><X /></button>
             </div>
             <div className="p-10">
@@ -125,7 +136,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Модалка профиля */}
       <OrganizerProfileModal 
         userId={selectedOrganizerId}
         isOpen={isOrganizerOpen}
