@@ -1,12 +1,12 @@
 "use client";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import { getLoginUrl, hydrateSessionFromUrl } from "../lib/auth";
 import { useRouter } from "next/navigation";
 import {
-  User, Mail, Edit3, LogOut, ShieldCheck, Camera, Loader2, Phone,
+  User, Mail, LogOut, ShieldCheck, Camera, Loader2, Phone,
 } from "lucide-react";
-import { getLoginUrl } from "../lib/auth";
+// Оставил только один импорт из библиотеки auth
+import { getLoginUrl, hydrateSessionFromUrl } from "../lib/auth";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -18,16 +18,17 @@ export default function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
+  // Инициализация Supabase
   const supabase = useMemo(() => createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "",
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
   ), []);
 
-const fetchUser = useCallback(async () => {
-    try { // <--- ОБЯЗАТЕЛЬНО ДОБАВИТЬ ЭТО
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+  const fetchUser = useCallback(async () => {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) throw error;
 
       const currentUser = session?.user || null;
 
@@ -35,26 +36,23 @@ const fetchUser = useCallback(async () => {
         setUser(currentUser);
         setNewName(currentUser.user_metadata?.full_name || "");
         setNewPhone(currentUser.user_metadata?.phone || "");
-        setLoading(false);
         return true;
       }
       
-      setLoading(false); // Выключаем загрузку, даже если юзера нет
       return false;
-      
-    } catch (err) { // Теперь catch работает законно
+    } catch (err) {
       console.error("Ошибка при получении данных пользователя:", err);
-      setLoading(false);
       return false;
     }
   }, [supabase]);
 
-  // 3. Обработка авторизации при монтировании
   useEffect(() => {
     let isMounted = true;
 
     const initAuth = async () => {
-      // Здесь можно добавить логику обработки токенов из URL, если она нужна
+      // Пытаемся восстановить сессию (для кросс-доменного входа)
+      await hydrateSessionFromUrl(supabase);
+      
       const hasSession = await fetchUser();
       
       if (isMounted) {
@@ -68,8 +66,7 @@ const fetchUser = useCallback(async () => {
 
     initAuth();
 
-    // Подписка на изменения состояния (Logout в другой вкладке и т.д.)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") {
         window.location.href = getLoginUrl();
       }
@@ -79,9 +76,8 @@ const fetchUser = useCallback(async () => {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, [fetchUser, supabase.auth]);
+  }, [fetchUser, supabase]);
 
-  // 4. Загрузка аватара
   const handleAvatarUpload = async (e) => {
     try {
       setUploading(true);
@@ -91,19 +87,16 @@ const fetchUser = useCallback(async () => {
       const fileExt = file.name.split(".").pop();
       const fileName = `${user.id}/${Math.random()}.${fileExt}`;
 
-      // Загрузка
       const { error: uploadError } = await supabase.storage
         .from("avatars")
         .upload(fileName, file);
 
       if (uploadError) throw uploadError;
 
-      // Получение URL
       const { data: { publicUrl } } = supabase.storage
         .from("avatars")
         .getPublicUrl(fileName);
 
-      // Обновление метаданных
       await supabase.auth.updateUser({ 
         data: { avatar_url: publicUrl } 
       });
@@ -117,7 +110,6 @@ const fetchUser = useCallback(async () => {
     }
   };
 
-  // 5. Обновление профиля
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
     setIsSaving(true);
@@ -136,6 +128,8 @@ const fetchUser = useCallback(async () => {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    // Используем router.refresh() перед редиректом для очистки кеша Next.js
+    router.refresh();
     window.location.href = getLoginUrl();
   };
 
@@ -155,7 +149,6 @@ const fetchUser = useCallback(async () => {
   return (
     <div className="min-h-screen bg-[#f8fafc] pb-10">
       <div className="max-w-3xl mx-auto py-12 px-4">
-        {/* Карточка профиля */}
         <div className="bg-white rounded-[40px] shadow-sm border border-gray-100 overflow-hidden mb-8">
           <div className="h-40 bg-gradient-to-br from-[#10b981] to-[#3b82f6]" />
           <div className="px-10 pb-10">
@@ -190,7 +183,6 @@ const fetchUser = useCallback(async () => {
           </div>
         </div>
 
-        {/* Данные пользователя */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white p-8 rounded-[35px] border border-gray-100 shadow-sm space-y-6">
             <div>
@@ -218,7 +210,6 @@ const fetchUser = useCallback(async () => {
         </div>
       </div>
 
-      {/* Модальное окно редактирования */}
       {isEditModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md">
           <div className="bg-white w-full max-w-md rounded-[40px] p-8 shadow-2xl">
