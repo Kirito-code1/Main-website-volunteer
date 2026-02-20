@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { createBrowserClient } from "@supabase/ssr";
+import { getLoginUrl, hydrateSessionFromUrl } from "../lib/auth";
 import { useRouter } from "next/navigation";
 import {
   User, Mail, Edit3, LogOut, ShieldCheck, Camera, Loader2, Phone,
@@ -17,27 +18,23 @@ export default function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  // 1. Правильная инициализация клиента
-  const supabase = useMemo(() => 
-    createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
-    ), 
-  []);
+  const supabase = useMemo(() => createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+  ), []);
 
-  // 2. Единственная функция загрузки пользователя
   const fetchUser = useCallback(async () => {
-    try {
-      const { data: { user }, error } = await supabase.auth.getUser();
-      
-      if (error || !user) {
-        setUser(null);
-        return false;
-      }
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
 
-      setUser(user);
-      setNewName(user.user_metadata?.full_name || "");
-      setNewPhone(user.user_metadata?.phone || "");
+    const currentUser = session?.user || null;
+
+    if (currentUser) {
+      setUser(currentUser);
+      setNewName(currentUser.user_metadata?.full_name || "");
+      setNewPhone(currentUser.user_metadata?.phone || "");
+      setLoading(false);
       return true;
     } catch (err) {
       console.error("Ошибка при получении данных пользователя:", err);
