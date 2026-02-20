@@ -23,21 +23,28 @@ export default function ProfilePage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
   ), []);
 
-  const fetchUser = useCallback(async () => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+const fetchUser = useCallback(async () => {
+    try { // <--- ОБЯЗАТЕЛЬНО ДОБАВИТЬ ЭТО
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-    const currentUser = session?.user || null;
+      const currentUser = session?.user || null;
 
-    if (currentUser) {
-      setUser(currentUser);
-      setNewName(currentUser.user_metadata?.full_name || "");
-      setNewPhone(currentUser.user_metadata?.phone || "");
-      setLoading(false);
-      return true;
-    } catch (err) {
+      if (currentUser) {
+        setUser(currentUser);
+        setNewName(currentUser.user_metadata?.full_name || "");
+        setNewPhone(currentUser.user_metadata?.phone || "");
+        setLoading(false);
+        return true;
+      }
+      
+      setLoading(false); // Выключаем загрузку, даже если юзера нет
+      return false;
+      
+    } catch (err) { // Теперь catch работает законно
       console.error("Ошибка при получении данных пользователя:", err);
+      setLoading(false);
       return false;
     }
   }, [supabase]);
