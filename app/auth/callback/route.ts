@@ -2,15 +2,19 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
+const AUTH_SITE_URL =
+  process.env.NEXT_PUBLIC_AUTH_SITE_URL ||
+  process.env.NEXT_PUBLIC_MAIN_SITE_URL ||
+  'https://main-website-volunteer.vercel.app';
+
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
   const next = searchParams.get('next') ?? '/';
 
   if (code) {
-    // ВАЖНО: Добавляем await, так как cookies() теперь возвращает Promise
-    const cookieStore = await cookies(); 
-    
+    const cookieStore = await cookies();
+
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -35,6 +39,5 @@ export async function GET(request: Request) {
     }
   }
 
-  // Возврат на страницу логина первого сайта, если что-то пошло не так
-  return NextResponse.redirect(`${origin}/login?error=auth-code-error`);
+  return NextResponse.redirect(`${AUTH_SITE_URL.replace(/\/$/, '')}/login?error=auth-code-error`);
 }
