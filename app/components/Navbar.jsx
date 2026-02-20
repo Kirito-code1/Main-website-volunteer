@@ -12,12 +12,12 @@ import {
   X 
 } from "lucide-react";
 import { createBrowserClient } from "@supabase/ssr";
+import { getLoginUrl } from "../lib/auth";
 
 export default function Navbar() {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
-  const MAIN_SITE_URL = "https://main-website-volunteer.vercel.app";
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "",
@@ -36,7 +36,7 @@ export default function Navbar() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    window.location.href = `${MAIN_SITE_URL}/login`;
+    window.location.href = getLoginUrl();
   };
 
   const navLinks = [
