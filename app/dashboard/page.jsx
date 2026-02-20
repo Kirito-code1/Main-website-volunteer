@@ -1,6 +1,7 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { createBrowserClient } from "@supabase/ssr";
+import { getLoginUrl } from "../lib/auth";
 import {
   User, Mail, Edit3, LogOut, ShieldCheck, Camera, CalendarDays, Loader2, Trash2, AlertTriangle, Phone,
 } from "lucide-react";
@@ -16,13 +17,12 @@ export default function ProfilePage() {
   const [uploading, setUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const AUTH_SITE_URL = "https://main-website-volunteer.vercel.app";
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "",
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
   );
 
-  const fetchUser = async () => {
+  const fetchUser = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       setUser(user);
@@ -32,7 +32,7 @@ export default function ProfilePage() {
       return true;
     }
     return false;
-  };
+  }, [supabase]);
 
   useEffect(() => {
     const handleInitialAuth = async () => {
@@ -53,12 +53,12 @@ export default function ProfilePage() {
       
       // 3. Если и так пусто — редирект на логин
       if (!hasSession) {
-        window.location.href = `${AUTH_SITE_URL}/login`;
+        window.location.href = getLoginUrl();
       }
     };
 
     handleInitialAuth();
-  }, []);
+  }, [fetchUser]);
 
   const handleAvatarUpload = async (e) => {
     try {
@@ -93,7 +93,7 @@ export default function ProfilePage() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    window.location.href = `${AUTH_SITE_URL}/login`;
+    window.location.href = getLoginUrl();
   };
 
   // Пока проверяем авторизацию — показываем спиннер
@@ -118,7 +118,7 @@ export default function ProfilePage() {
             <div className="relative -mt-20 mb-6 flex justify-between items-end">
               <div className="w-40 h-40 bg-white rounded-[38px] p-1.5 shadow-2xl overflow-hidden relative">
                 {user.user_metadata?.avatar_url ? (
-                   <img src={user.user_metadata.avatar_url} className="w-full h-full object-cover rounded-[32px]" />
+                   <img src={user.user_metadata.avatar_url} className="w-full h-full object-cover rounded-[32px]" alt="Фото профиля" />
                 ) : (
                    <User className="w-full h-full p-8 text-gray-200" />
                 )}
