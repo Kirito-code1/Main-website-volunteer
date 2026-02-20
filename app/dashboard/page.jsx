@@ -20,7 +20,12 @@ export default function ProfilePage() {
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "",
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
-  );
+  ), []);
+
+  const fetchUser = useCallback(async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
   const fetchUser = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -31,27 +36,20 @@ export default function ProfilePage() {
       setLoading(false);
       return true;
     }
+
+    setUser(null);
     return false;
   }, [supabase]);
 
   useEffect(() => {
     const handleInitialAuth = async () => {
-      // 1. Проверяем, пришел ли токен в URL (#access_token=...)
-      const hash = window.location.hash;
-      if (hash && hash.includes("access_token")) {
-        // Supabase автоматически подхватит токены из URL при вызове getUser() или getSession()
-        const isSuccess = await fetchUser();
-        if (isSuccess) {
-          // Очищаем URL от токенов для безопасности
-          window.history.replaceState(null, "", window.location.pathname);
-          return;
-        }
-      }
+      // 1. Пробуем восстановить сессию из URL-токенов (кросс-доменный вход)
+      await hydrateSessionFromUrl(supabase);
 
-      // 2. Если в URL ничего нет, пробуем обычную загрузку (куки)
+      // 2. Проверяем текущую сессию
       const hasSession = await fetchUser();
-      
-      // 3. Если и так пусто — редирект на логин
+
+      // 3. Если пусто — редирект на логин
       if (!hasSession) {
         window.location.href = getLoginUrl();
       }
