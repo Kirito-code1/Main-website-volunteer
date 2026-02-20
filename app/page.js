@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { 
   User, 
@@ -16,9 +16,13 @@ export default function HomePage() {
   const [isOrganizerOpen, setIsOrganizerOpen] = useState(false);
   const [selectedOrganizerId, setSelectedOrganizerId] = useState(null);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+  const supabase = useMemo(
+    () =>
+      createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+      ),
+    []
   );
 
   const fetchEvents = useCallback(async () => {

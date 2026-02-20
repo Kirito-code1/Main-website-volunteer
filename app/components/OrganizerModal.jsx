@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   User,
   Mail,
@@ -15,18 +15,16 @@ export default function OrganizerProfileModal({ userId, isOpen, onClose }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
+  const supabase = useMemo(
+    () =>
+      createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+      ),
+    []
   );
 
-  useEffect(() => {
-    if (isOpen && userId) {
-      fetchOrganizerProfile();
-    }
-  }, [isOpen, userId]);
-
-  async function fetchOrganizerProfile() {
+  const fetchOrganizerProfile = useCallback(async () => {
     try {
       setLoading(true);
       setProfile(null);
@@ -48,7 +46,13 @@ export default function OrganizerProfileModal({ userId, isOpen, onClose }) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [supabase, userId]);
+
+  useEffect(() => {
+    if (isOpen && userId) {
+      fetchOrganizerProfile();
+    }
+  }, [fetchOrganizerProfile, isOpen, userId]);
 
   // Функция для форматирования даты "На сайте с..."
   const formatJoinedDate = (dateString) => {
